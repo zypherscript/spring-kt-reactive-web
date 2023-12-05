@@ -1,5 +1,8 @@
 package com.example.springkotlinreactiveweb
 
+import kotlinx.coroutines.flow.count
+import kotlinx.coroutines.runBlocking
+import org.springframework.boot.CommandLineRunner
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
@@ -9,6 +12,16 @@ import org.springframework.web.reactive.function.server.*
 
 @SpringBootApplication
 class SpringKotlinReactiveWebApplication {
+
+    @Bean
+    fun init(customerRepository: CustomerRepository): CommandLineRunner {
+        return CommandLineRunner {
+            runBlocking {
+                println(customerRepository.findAll().count())
+            }
+        }
+    }
+
     @Bean
     fun http(customerRepository: CustomerRepository) = coRouter {
         GET("/customers") {
