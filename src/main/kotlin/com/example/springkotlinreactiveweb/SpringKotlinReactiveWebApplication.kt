@@ -8,6 +8,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
 import org.springframework.context.annotation.Bean
 import org.springframework.core.io.buffer.DataBuffer
+import org.springframework.core.io.buffer.DataBufferUtils
+import org.springframework.core.io.buffer.DefaultDataBufferFactory
 import org.springframework.data.annotation.Id
 import org.springframework.data.repository.kotlin.CoroutineCrudRepository
 import org.springframework.http.server.reactive.ServerHttpResponse
@@ -20,7 +22,7 @@ import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.io.ByteArrayOutputStream
-import java.nio.channels.Channels
+
 
 @SpringBootApplication
 class SpringKotlinReactiveWebApplication {
@@ -73,11 +75,19 @@ class LoggingResponseDecorator internal constructor(delegate: ServerHttpResponse
     override fun writeWith(body: Publisher<out DataBuffer>): Mono<Void> {
         return super.writeWith(
             Flux.from(body)
-                .doOnNext { buffer: DataBuffer ->
+                .map { buffer ->
+                    val bytes = ByteArray(buffer.readableByteCount())
+                    buffer.read(bytes)
+                    DataBufferUtils.release(buffer)
+                    bytes
+                }
+                .map { bytes ->
                     val bodyStream = ByteArrayOutputStream()
-                    Channels.newChannel(bodyStream)
-                        .write(buffer.asByteBuffer().asReadOnlyBuffer())
+                    bodyStream.write(bytes)
                     println(String(bodyStream.toByteArray()))
-                })
+                    bytes
+                }
+                .map { bytes -> DefaultDataBufferFactory().wrap(bytes) }
+        )
     }
 }
