@@ -1,8 +1,9 @@
 package com.example.springkotlinreactiveweb
 
-import kotlinx.coroutines.flow.count
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.reactivestreams.Publisher
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.CommandLineRunner
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
@@ -12,9 +13,14 @@ import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.core.io.buffer.DefaultDataBufferFactory
 import org.springframework.data.annotation.Id
 import org.springframework.data.repository.kotlin.CoroutineCrudRepository
+import org.springframework.data.repository.reactive.ReactiveCrudRepository
 import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.http.server.reactive.ServerHttpResponseDecorator
 import org.springframework.stereotype.Component
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.reactive.function.server.*
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
@@ -28,11 +34,23 @@ import java.io.ByteArrayOutputStream
 class SpringKotlinReactiveWebApplication {
 
     @Bean
-    fun init(customerRepository: CustomerRepository): CommandLineRunner {
+    fun init(
+        customerRepository: CustomerRepository,
+        reactiveCustomerRepository: ReactiveCustomerRepository
+    ): CommandLineRunner {
         return CommandLineRunner {
             runBlocking {
-                println(customerRepository.findAll().count())
+                customerRepository.findAll()
+                    .toList()
+                    .forEach { println(it) }
+                println("All customers printed<coroutine>!")
             }
+            reactiveCustomerRepository.findAll()
+                .subscribe(
+                    { customer -> println(customer.toString()) },
+                    { error -> System.err.println("Error occurred: $error") }
+                )
+                { println("All customers printed<reactive>!") }
         }
     }
 
@@ -53,11 +71,31 @@ class SpringKotlinReactiveWebApplication {
     }
 }
 
+@RestController
+@RequestMapping("/reactivecustomers")
+class ProductController {
+
+    @Autowired
+    lateinit var customerRepository: ReactiveCustomerRepository
+
+    @GetMapping("/{id}")
+    fun customer(@PathVariable id: Int): Mono<Customer> {
+        return customerRepository.findById(id)
+    }
+
+    @GetMapping
+    fun customers(): Flux<Customer> {
+        return customerRepository.findAll()
+    }
+}
+
 fun main(args: Array<String>) {
     runApplication<SpringKotlinReactiveWebApplication>(*args)
 }
 
 interface CustomerRepository : CoroutineCrudRepository<Customer, Int>
+
+interface ReactiveCustomerRepository : ReactiveCrudRepository<Customer, Int>
 
 data class Customer(@Id val id: Int?, val name: String)
 
